@@ -1,0 +1,149 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import sys,os,argparse,re
+import bibtexparser
+from bibtexparser.bparser       import BibTexParser
+from bibtexparser.customization import homogeneize_latex_encoding
+
+# ==============================================================================
+
+def printhelp():
+  print(r'''
+NAME
+
+  bibkeys - find matching citations in two BibTeX files
+
+USAGE
+
+  $ bibkeys REFERENCE.BIB OTHER.BIB
+
+DESCRIPTION
+
+  Find matching citations in two BibTeX files. The matched keys are printed to
+  the screen.
+
+OPTIONS
+
+  -h, --help
+    Print help.
+
+  --version
+    Print version.
+
+  --diff
+    Print only the keys that are different.
+
+RELEASE
+
+  Version 0.1.0, April 2017
+
+COPYRIGHT
+
+  T.W.J. de Geus
+  tom@geus.me
+  www.geus.me
+  ''')
+
+  sys.exit(0)
+
+# ==============================================================================
+
+def printversion():
+  print('''
+Version 0.1.0, April 2017
+
+  - First working version.
+  ''')
+  sys.exit(0)
+
+# ==============================================================================
+
+# set options/arguments
+opts = [\
+  ((     'ref'      ),dict(nargs=1  ,type=str,metavar='REFERENCE.BIB')),
+  ((     'other'    ),dict(nargs=1  ,type=str,metavar='OTHER.BIB'    )),
+  (('-h','--help'   ),dict(action='store_true'                       )),
+  ((     '--version'),dict(action='store_true'                       )),
+  ((     '--diff'   ),dict(action='store_true'                       )),
+]
+
+# parse command-line arguments
+# - catch help
+if sys.argv[1] in ['-h','--help'   ]: printhelp()
+if sys.argv[1] in [     '--version']: printversion()
+# - create parser
+ioparser = argparse.ArgumentParser(add_help=False)
+for (arg,opt) in opts:
+  if type(arg)==tuple: ioparser.add_argument(*arg,**opt)
+  else               : ioparser.add_argument( arg,**opt)
+# - execute parser / convert to "<dict>"
+args = vars(ioparser.parse_args())
+# - print help and exit
+if args['help'   ]: printhelp()
+if args['version']: printversion()
+
+# convert from list / set default
+for key in ['ref','other']:
+  args[key] = args[key][0]
+
+# check if the input-file exists
+for key in ['ref','other']:
+  if not os.path.isfile(args[key]):
+    raise ioparser.error('input file does not exist')
+
+# ==============================================================================
+
+# read bib-files
+parser  = BibTexParser(); ref   = bibtexparser.load(open(args['ref'  ],'r'),parser=parser)
+parser  = BibTexParser(); other = bibtexparser.load(open(args['other'],'r'),parser=parser)
+
+# store information from the reference file
+keys    = [entry.get('ID'     ) for entry in ref.entries]
+doi     = [entry.get('doi'    ) for entry in ref.entries]
+eprint  = [entry.get('eprint' ) for entry in ref.entries]
+journal = [entry.get('journal') for entry in ref.entries]
+year    = [entry.get('year'   ) for entry in ref.entries]
+volume  = [entry.get('volume' ) for entry in ref.entries]
+number  = [entry.get('number' ) for entry in ref.entries]
+pages   = [entry.get('pages'  ) for entry in ref.entries]
+found   = [''                   for entry in ref.entries]
+
+# loop over the "other" file
+for entry in other.entries:
+  # try to match doi, if found continue to the next "entry"
+  i = entry.get('doi','')
+  if i in doi:
+    found[doi.index(i)] = entry.get('ID')
+    continue
+  # try to match arxiv, if found continue to the next "entry"
+  i = entry.get('eprint','')
+  if i in eprint:
+    found[eprint.index(i)] = entry.get('ID')
+    continue
+  # try to match journal/year/volume/number/pages
+  # - extract info from current entry from the "other" file
+  j = entry.get('journal','')
+  y = entry.get('year'   ,'')
+  v = entry.get('volume' ,'')
+  n = entry.get('number' ,'')
+  p = entry.get('pages'  ,'')
+  # - loop over entries in reference file
+  for i in range(len(found)):
+    if j==journal[i] and y==year[i] and v==volume[i] and n==number[i] and p==pages[i]:
+      found[i] = entry.get('ID')
+      break
+
+# find column with
+N = 0
+for old,new in zip(keys,found):
+  if old!=new or not args['diff']:
+    N = max(N,len(old))
+# set print-format
+fmt = '{0:'+str(N)+'s} <- '+'{1:s}'
+
+# print all entries or only difference
+for old,new in zip(keys,found):
+  if old!=new or not args['diff']:
+    print(fmt.format(old,new))
+
