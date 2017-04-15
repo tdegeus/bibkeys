@@ -20,8 +20,8 @@ USAGE
 
 DESCRIPTION
 
-  Find matching citations in two BibTeX files. The matched keys are printed to
-  the screen.
+  Find matching citations in two BibTeX files. The keys from the reference file
+  are printed together with the match keys from the reference files.
 
 OPTIONS
 
